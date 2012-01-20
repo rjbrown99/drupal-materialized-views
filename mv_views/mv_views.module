@@ -33,7 +33,6 @@ function mv_views_views_pre_execute(&$view) {
     $view->build_info['query'] = $sql;
   }
   
-  dsm($view);
 }
 
 /*
@@ -88,7 +87,6 @@ function mv_views_construct_mview($views_display) {
     foreach ($views_display->display_options['filters'] as $name => $filter) {
       // TODO: Make the conversion work with non-equality operators and exposed filters.
       if ($filter['operator'] != '=' || $filter['exposed']) {
-        dsm($views_display);
         return FALSE;
       }
       

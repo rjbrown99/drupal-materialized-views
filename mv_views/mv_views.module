@@ -7,7 +7,7 @@ function mv_views_views_pre_execute(&$view) {
   $table = 'mv_' . $view->name . '_' . $view->current_display;
   if (db_table_exists($table)) {
     $mview = materialized_view_get($table);
-  
+
     $sql = 'SELECT entity_id AS nid, mv.* FROM {' . $table . '} mv';
 
     $view->build_info['count_query'] = $sql;
@@ -16,7 +16,7 @@ function mv_views_views_pre_execute(&$view) {
     $sort_sets = $mview->getSortSets();
     if (!empty($sort_sets)) {
       $sql_sorts = array();
-      
+
       $sort_set = array_pop($sort_sets);
       $sorts = $sort_set->getSorts();
       foreach ($sorts as $sort) {
@@ -32,7 +32,7 @@ function mv_views_views_pre_execute(&$view) {
 
     $view->build_info['query'] = $sql;
   }
-  
+
 }
 
 /*
@@ -40,13 +40,13 @@ function mv_views_views_pre_execute(&$view) {
  */
 function mv_views_menu() {
   $items = array();
-  
+
   $items['admin/reports/mv_views'] = array(
     'title' => 'Views + MV integration',
     'page callback' => 'mv_views_page',
     'access callback' => TRUE,
   );
-  
+
   return $items;
 }
 
@@ -64,9 +64,9 @@ function mv_views_materialized_view_info() {
   $res = db_query('SELECT v.name, vd.* FROM {views_view} v INNER JOIN {views_display} vd ON vd.vid = v.vid');
   while ($views_display = db_fetch_object($res)) {
     $default_display_options = db_result(db_query('SELECT display_options FROM {views_display} WHERE id = "default" AND vid = %d', $views_display->vid));
-  
+
     $views_display->display_options = unserialize($default_display_options) + unserialize($views_display->display_options);
-    
+
     $mview = mv_views_construct_mview($views_display);
 
     if ($mview !== FALSE) {
@@ -78,10 +78,10 @@ function mv_views_materialized_view_info() {
 
 function mv_views_construct_mview($views_display) {
   $mview = new MaterializedView('mv_' . $views_display->name . '_' . $views_display->id);
-  
+
   // Restrict to nodes
   $mview->addStaticFilter(new MVEntityType(), new MVEqualityOperator('node'));
-  
+
   // Load filters, if any
   if (is_array($views_display->display_options['filters'])) {
     foreach ($views_display->display_options['filters'] as $name => $filter) {
@@ -89,34 +89,34 @@ function mv_views_construct_mview($views_display) {
       if ($filter['operator'] != '=' || $filter['exposed']) {
         return FALSE;
       }
-      
+
       $value = $filter['value'];
       if (is_array($value)) {
         $value = $value['value'];
       }
-      
+
       $mview->addStaticFilter(new MVViewsNodeColumn($filter['table'], $filter['field']), new MVEqualityOperator($value));
     }
   }
-  
+
   // TODO: Load exposed filters as "dynamic" filters.
-  
+
   // Does the View have a sort?
   if (is_array($views_display->display_options['sorts'])) {
     $sortset = new MVSortSet('mvv');
-  
+
     foreach ($views_display->display_options['sorts'] as $sort) {
       $order = MV_SORT_ASCENDING;
       if ($sort['order'] == 'DESC') {
         $order = MV_SORT_DESCENDING;
       }
-      
+
       $sortset->addSort(new MVViewsNodeColumn($sort['table'], $sort['field']), $order);
     }
-  
-    $mview->addSortSet($sortset);  
+
+    $mview->addSortSet($sortset);
   }
-  
+
   return $mview;
 }
 
@@ -131,15 +131,15 @@ class MVViewsNodeColumn extends MVColumn {
 
   public function getValue($entity_type, $entity_id) {
     $node = (array) MVEntityCache::get('node', $entity_id);
-    
+
     if (isset($node[$this->column_name])) {
       return $node[$this->column_name];
     }
-    
+
     // TODO: Probably stop assuming this is a CCK field.
-    
+
     $values = array();
-    $column = substr($this->column_name, 0, -6);
+    $column = drupal_substr($this->column_name, 0, -6);
     if (is_array($node[$column])) {
       foreach ($node[$column] as $value) {
         $values[] = $value['value'];
@@ -149,12 +149,12 @@ class MVViewsNodeColumn extends MVColumn {
     if (count($values) == 1) {
       return array_pop($values);
     }
-    
+
     return $values;
   }
 
   // Perform a direct node-to-node change mapping.
-  public function getChangeMapping($entity_type, $entity_id) {    
+  public function getChangeMapping($entity_type, $entity_id) {
     $changed = array();
     if ($entity_type == 'node') {
       $changed[$entity_type] = array($entity_id);
@@ -164,7 +164,7 @@ class MVViewsNodeColumn extends MVColumn {
 
   public function getSchema() {
     $table = 'node';
-    
+
     if ($this->table_name != 'node') {
       $views_path = drupal_get_path('module', 'views');
       require_once $views_path . '/includes/base.inc';
@@ -172,9 +172,9 @@ class MVViewsNodeColumn extends MVColumn {
       $table = views_get_table_join($this->table_name, 'node');
       $table = $table->table;
     }
-  
+
     $schema = drupal_get_schema($table);
-    
+
     //$schema = drupal_get_schema_unprocessed('node', 'node');
     $field_schema = $schema['fields'][$this->column_name];
 
@@ -182,7 +182,7 @@ class MVViewsNodeColumn extends MVColumn {
     if ($field_schema['type'] == 'serial') {
       $field_schema['type'] = 'int';
     }
-    
+
     return $field_schema;
   }
 

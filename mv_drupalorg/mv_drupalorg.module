@@ -27,7 +27,7 @@ function mv_drupalorg_materialized_view_info() {
 
 function _mv_drupalorg_node_by_term() {
   $mview = new MaterializedView('mv_drupalorg_node_by_term');
-  
+
   // Only include published nodes.
   //$mview->addStaticFilter(new MVEntityType(), new MVEqualityOperator('node'));
   $mview->addStaticFilter(new MVNodeColumn('status'), new MVEqualityOperator(1));
@@ -41,7 +41,7 @@ function _mv_drupalorg_node_by_term() {
   $sortset->addSort(new MVLastNodeActivityTimestamp(), MV_SORT_DESCENDING);
   $sortset->addSort(new MVNodeColumn('created'), MV_SORT_DESCENDING);
   $mview->addSortSet($sortset);
-  
+
   // Sort by stickiness and then thread creation timestamp.
   $sortset = new MVSortSet('creation');
   $sortset->addSort(new MVNodeColumn('sticky'), MV_SORT_DESCENDING);
@@ -65,7 +65,7 @@ function _mv_drupalorg_node_by_term() {
 
 function _mv_drupalorg_node_by_vocabulary() {
   $mview = new MaterializedView('mv_drupalorg_node_by_vocabulary');
-  
+
   // Only include published nodes.
   $mview->addStaticFilter(new MVEntityType(), new MVEqualityOperator('node'));
   $mview->addStaticFilter(new MVNodeColumn('status'), new MVEqualityOperator(1));
@@ -77,7 +77,7 @@ function _mv_drupalorg_node_by_vocabulary() {
   $sortset = new MVSortSet('nid');
   $sortset->addSort(new MVNodeColumn('nid'), MV_SORT_DESCENDING);
   $mview->addSortSet($sortset);
-  
+
   // Sort by last activity.
   $sortset = new MVSortSet('last_comment_timestamp');
   $sortset->addSort(new MVNodeCommentStatistic('last_comment_timestamp'), MV_SORT_DESCENDING);

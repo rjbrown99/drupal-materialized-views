@@ -5,13 +5,13 @@
  */
 function materialized_view_entity_type_info() {
   $types = array();
-  
+
   $types['node'] = array(
     'title' => t('Node'),
     'id_table' => 'node',
     'id_column' => 'nid',
   );
-  
+
   return $types;
 }
 
@@ -23,7 +23,7 @@ function materialized_view_nodeapi($node, $op) {
   if ($op == 'insert' || $op == 'update') {
     MVJobQueue::update('node', $node->nid);
   }
-  else if ($op == 'delete') {
+  elseif ($op == 'delete') {
     MVJobQueue::delete('node', $node->nid);
   }
 }
@@ -65,7 +65,7 @@ class MVNodeColumn extends MVColumn {
     if ($entity_type == 'node') {
       $changed[$entity_type] = array($entity_id);
     }
-    
+
     return $changed;
   }
 
@@ -77,7 +77,7 @@ class MVNodeColumn extends MVColumn {
     if ($field_schema['type'] == 'serial') {
       $field_schema['type'] = 'int';
     }
-    
+
     return $field_schema;
   }
 
@@ -105,13 +105,13 @@ class MVLastNodeActivityTimestamp extends MVColumn {
       // A change to a node only affects its own value.
       $changed['node'] = array($entity_id);
     }
-    else if ($entity_type == 'comment') {
+    elseif ($entity_type == 'comment') {
       $comment = MVEntityCache::get('comment', $entity_id, '_comment_load');
-      
+
       // A change to a comment affects the value of the node it's attached to.
       $changed['node'] = array($comment['nid']);
     }
-    
+
     return $changed;
   }
 
@@ -150,13 +150,13 @@ class MVNodeTerms extends MVColumn {
       // A change to a node only affects its own value.
       $changed['node'] = array($entity_id);
     }
-    else if ($entity_type == 'term') {
+    elseif ($entity_type == 'term') {
       // TODO: Implement change propagation for terms.
     }
-    
+
     return $changed;
   }
-  
+
   public function getSchema() {
     $schema = drupal_get_schema_unprocessed('taxonomy', 'term_node');
     return $schema['fields']['tid'];
@@ -171,10 +171,10 @@ class MVNodeVocabularies extends MVColumn {
   public function getValue($entity_type, $entity_id) {
     $node = node_load($entity_id);
     $vids = array();
-    
+
     // Add in a "zero" vid for as a sort of NULL.
     $vids[] = 0;
-    
+
     $res = db_query('SELECT DISTINCT td.vid FROM {term_node} tn INNER JOIN {term_data} td ON td.tid = tn.tid WHERE tn.vid = %d', $node->vid);
     while ($row = db_fetch_array($res)) {
       $vids[] = $row['vid'];
@@ -189,16 +189,16 @@ class MVNodeVocabularies extends MVColumn {
       // A change to a node only affects its own value.
       $changed['node'] = array($entity_id);
     }
-    else if ($entity_type == 'term') {
+    elseif ($entity_type == 'term') {
       // TODO: Implement change propagation for terms.
     }
-    else if ($entity_type == 'vocabulary') {
+    elseif ($entity_type == 'vocabulary') {
       // TODO: Implement change propagation for vocabularies.
     }
-    
+
     return $changed;
   }
-  
+
   public function getSchema() {
     $schema = drupal_get_schema_unprocessed('taxonomy', 'term_data');
     return $schema['fields']['vid'];
@@ -242,13 +242,13 @@ class MVNodeCommentStatistic extends MVColumn {
       // A change to a node only affects its own value.
       $changed['node'] = array($entity_id);
     }
-    else if ($entity_type == 'comment') {
+    elseif ($entity_type == 'comment') {
       $comment = MVEntityCache::get('comment', $entity_id, '_comment_load');
-      
+
       // A change to a comment affects the value of the node it's attached to.
       $changed['node'] = array($comment['nid']);
     }
-    
+
     return $changed;
   }
 

@@ -1,4 +1,9 @@
 <?php
+/**
+ * @file
+ * Materialized views tests
+ *
+ */
 
 class MVTestCase extends DrupalWebTestCase {
   function getInfo() {

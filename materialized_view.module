@@ -7,7 +7,7 @@ require 'materialized_view.class.inc';
  */
 function materialized_view_menu() {
   $items = array();
-  
+
   $items['admin/reports/materialized_view'] = array(
     'title' => 'Materialized view status',
     'description' => 'Check the status of indexing on materialized views.',
@@ -16,14 +16,14 @@ function materialized_view_menu() {
     'file' => 'materialized_view.admin.inc',
     'file path' => drupal_get_path('module', 'materialized_view'),
   );
-  
+
   $items['cron/materialized_view/%'] = array(
     'page callback' => 'materialized_view_index',
     'page arguments' => array(2),
     'access callback' => TRUE,
     'type' => MENU_CALLBACK,
   );
-  
+
   return $items;
 }
 
@@ -68,45 +68,45 @@ function materialized_view_reconcile() {
 
   // Load the list of materialized views.
   $materialized_views = materialized_view_get();
-  
+
   foreach ($materialized_views as $materialized_view) {
     if ($materialized_view->verifySchema()) {
       $effect = TRUE;
     }
   }
-  
+
   // Remove tables and indexing data for views that no longer have registration.
   $res = db_query('SELECT mvid FROM {materialized_view}');
   while ($row = db_fetch_array($res)) {
     if (!array_key_exists($row['mvid'], $materialized_views)) {
-    
+
       // Create a dummy MV to "uninstall."
       $materialized_view_to_drop = new MaterializedView($row['mvid']);
       $materialized_view_to_drop->uninstallSchema();
-      
+
       $effect = TRUE;
     }
   }
-  
+
   return $effect;
 }
 
 /**
  * Retrieve the array for an entity type by name
- * or retrieve an array of all entity types. 
- * 
+ * or retrieve an array of all entity types.
+ *
  * @param $name
  *   The name of the entity type.
  *   Pass NULL to get all entity types.
  */
 function materialized_view_entity_type_get($name = NULL, $reset = FALSE) {
   static $entity_types = NULL;
-  
+
   // Check if the set of entity types is in the static cache.
   if (is_null($entity_types) || $reset) {
     $entity_types = module_invoke_all('entity_type_info');
   }
-  
+
   // Return just one entity object if a name was specified.
   if (!is_null($name)) {
     return $entity_types[$name];
@@ -117,27 +117,27 @@ function materialized_view_entity_type_get($name = NULL, $reset = FALSE) {
 
 /**
  * Retrieve the object for a materialized view by name
- * or retrieve an array of all materialized views. 
- * 
+ * or retrieve an array of all materialized views.
+ *
  * @param $name
  *   The name of the materialized view.
  *   Pass NULL to get all materialized views.
  */
 function materialized_view_get($name = NULL, $reset = FALSE) {
   static $materialized_views = NULL;
-  
+
   // Check if the set of materialized views is in the static cache.
   if (is_null($materialized_views) || $reset) {
     $materialized_views = array();
     $hook_results = module_invoke_all('materialized_view_info');
-    
+
     // Loop through materialized views and load them into the cache,
     // keyed by name.
     foreach ($hook_results as $hook_result) {
       $materialized_views[$hook_result->getName()] = $hook_result;
     }
   }
-  
+
   // Return just one MV object if a name was specified.
   if (!is_null($name)) {
     return $materialized_views[$name];

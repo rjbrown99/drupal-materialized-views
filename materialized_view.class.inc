@@ -1,4 +1,9 @@
 <?php
+/**
+ * @file
+ * Materialized views master classes
+ *
+ */
 
 define('MV_SORT_ASCENDING', 'ASC');
 define('MV_SORT_DESCENDING', 'DEC');
@@ -32,7 +37,7 @@ class MaterializedView {
   public function getName() {
     return $this->name;
   }
-  
+
   /**
    * Adds extra column that provides data consolidation but
    * is not indexed.
@@ -60,7 +65,7 @@ class MaterializedView {
     $filter->operator = $operator;
     $this->static_filters[] = $filter;
   }
-  
+
   /**
    * Adds filter configured to run at query time.
    *
@@ -73,7 +78,7 @@ class MaterializedView {
     $filter = new stdClass();
     $filter->column = $column;
     $filter->operator = $operator;
-    $this->dynamic_filters[] = $filter;    
+    $this->dynamic_filters[] = $filter;
   }
 
   /**
@@ -83,7 +88,7 @@ class MaterializedView {
    *   MVSortSet object to be used as a sort set.
    */
   public function addSortSet(MVSortSet $sort_set) {
-    $this->sort_sets[] = $sort_set;    
+    $this->sort_sets[] = $sort_set;
   }
 
   /**
@@ -107,39 +112,39 @@ class MaterializedView {
     // (1) Indexable conditions that don't end the index.
     // (2) Indexable conditions that end the index.
     // (3) Unindexable conditions.
-    
+
     foreach ($this->dynamic_filters as $dynamic_filter) {
       $base_index[] = $dynamic_filter->column->getName();
-      
+
       // TODO OPTIMIZATION: Stop building this index if we encounter a filter that ends the index.
     }
-    
+
     if (empty($this->sort_sets)) {
       if (!empty($base_index)) {
         $indexes['mv_base'] = $base_index;
       }
     }
-    else {    
+    else {
       foreach ($this->sort_sets as $sort_set) {
         $index = $base_index;
         $sorts = $sort_set->getSorts();
-  
+
         // TODO OPTIMIZATION: Apply effective order reversals to maximize ASC/DESC consistency.
-  
+
         foreach ($sort_set->getSorts() as $sort) {
-          $index[] = $sort->column->getName();      
-          
+          $index[] = $sort->column->getName();
+
           // TODO OPTIMIZATION: Stop building this index if the ASC/DESC direction changes.
         }
         $indexes[$sort_set->getName()] = $index;
       }
     }
-    
+
     // TODO OPTIMIZATION: Prune indexes that are proper prefixes of other indexes.
-    
+
     return $indexes;
   }
-  
+
   /**
    * Gets the an array of the sort sets.
    *
@@ -155,7 +160,7 @@ class MaterializedView {
    */
   public function getSchema() {
     $schema = array();
-    
+
     $schema['fields'] = array(
       'entity_type' => array(
         'type' => 'varchar',
@@ -188,23 +193,23 @@ class MaterializedView {
     foreach ($this->extra_columns as $extra_column) {
       $schema['fields'][$extra_column->getName()] = $extra_column->getSchema();
     }
-    
+
     $schema['description'] = 'Materialized view storage for ' . $this->name . '.';
     $schema['indexes'] = $this->getIndexes();
     $schema['primary key'] = $this->getPrimaryKey();
-    
+
     return $schema;
   }
-  
+
   /**
    * Install the schema for this materialized view.
    */
   public function installSchema() {
     // TODO: Remove the ability to trample existing, non-MV tables.
-  
+
     // First, remove all data for this MV.
     $this->uninstallSchema();
-    
+
     // Generate and install the schema.
     $ret = array();
     $schema = $this->getSchema();
@@ -219,7 +224,7 @@ class MaterializedView {
 
     watchdog('mv', 'Installed: ' . check_plain($this->getName()));
   }
-  
+
   /**
    * Uninstall the schema for this materialized view.
    */
@@ -237,7 +242,7 @@ class MaterializedView {
 
     watchdog('mv', 'Uninstalled: ' . check_plain($this->getName()));
   }
-  
+
   /**
    * Verify that the installed schema is current. If not, update it.
    */
@@ -246,7 +251,7 @@ class MaterializedView {
 
     // Load the mview record from the database.
     $installed_schema_hash = db_result(db_query('SELECT schema_hash FROM {materialized_view} WHERE mvid = "%s"', $this->getName()));
-    
+
     // Check that any schema for this MV are installed.
     if ($installed_schema_hash) {
       $schema_hash = sha1(serialize($this->getSchema()));
@@ -262,20 +267,20 @@ class MaterializedView {
       $this->installSchema();
       $effect = TRUE;
     }
-    
+
     return $effect;
   }
-  
+
   /**
    * Index up to $batch_size items from each entity type.
    */
   public function index($batch_size) {
     $last_id = NULL;
     $existing_cursor = NULL;
-  
+
     // Get a list of all entity types.
     $entity_types = materialized_view_entity_type_get();
-    
+
     // Get indexing status for all entity types.
     $index_status = array();
     $res = db_query('SELECT entity_type, max_indexed_id FROM {materialized_view_indexing} WHERE mvid = "%s"', $this->getName());
@@ -289,7 +294,7 @@ class MaterializedView {
         db_query('DELETE FROM {materialized_view_indexing} WHERE mvid = "%s" AND entity_type = "%s"', $this->getName(), $row['entity_type']);
       }
     }
-    
+
     // Index a batch from each entity type.
     foreach ($entity_types as $entity_type_name => $entity_type_info) {
       // If there's no record of the maximum ID indexed, use one more than the current maximum.
@@ -299,22 +304,22 @@ class MaterializedView {
         $entity_type_info['max_indexed_id'] = db_result(db_query($max_id_sql)) + 1;
         $existing_cursor = FALSE;
       }
-      
+
       if ($entity_type_info['max_indexed_id'] > 1) {
         // Fetch a batch of IDs to index.
         $id_sql = 'SELECT t.' . db_escape_table($entity_type_info['id_column']) . ' AS id FROM {' . db_escape_table($entity_type_info['id_table']) . '} t WHERE t.' . db_escape_table($entity_type_info['id_column']) . ' < %d ORDER BY t.' . db_escape_table($entity_type_info['id_column']) . ' DESC';
         $res = db_query_range($id_sql, $entity_type_info['max_indexed_id'], 0, $batch_size);
-        
+
         // TODO: Make i18n.
         $log_entry = 'Indexing "' . check_plain($entity_type_name) . '" with IDs under ' . check_plain($entity_type_info['max_indexed_id']) . '.';
         watchdog('mv', $log_entry);
-        
+
         // Index the IDs.
         while ($row = db_fetch_array($res)) {
           $this->update($entity_type_name, $row['id']);
           $last_id = $row['id'];
         }
-        
+
         // Update the indexing cursor.
         if ($existing_cursor) {
           db_query('UPDATE {materialized_view_indexing} SET max_indexed_id = %d WHERE mvid = "%s" AND entity_type = "%s"', $last_id, $this->getName(), $entity_type_name);
@@ -323,7 +328,7 @@ class MaterializedView {
           db_query('INSERT INTO {materialized_view_indexing} (max_indexed_id, mvid, entity_type) VALUES (%d, "%s", "%s")', $last_id, $this->getName(), $entity_type_name);
         }
       }
-    } 
+    }
   }
 
   /**
@@ -337,7 +342,7 @@ class MaterializedView {
    */
   public function update($entity_type, $entity_id, $deletion_mode = FALSE) {
     $mappings = array();
-    
+
     // Allow each source to map the change to affected entity type/ID pairs.
     foreach ($this->dynamic_filters as $source) {
       $mappings = array_merge_recursive($mappings, $source->column->getChangeMapping($entity_type, $entity_id));
@@ -348,9 +353,9 @@ class MaterializedView {
     foreach ($this->extra_columns as $source) {
       $mappings = array_merge_recursive($mappings, $source->getChangeMapping($entity_type, $entity_id));
     }
-    
+
     // TODO OPTIMIZATION: Only update the columns related to the change mappings.
-    
+
     // In deletion mode, remove the actual deleted entity type/ID
     // (if present) from the update set.
     if ($deletion_mode && isset($mappings[$entity_type])) {
@@ -359,7 +364,7 @@ class MaterializedView {
         unset($mappings[$entity_type][$key]);
       }
     }
-    
+
     // For each unique entity type and ID, run the update.
     foreach ($mappings as $entity_type => $entity_ids) {
       foreach (array_unique($entity_ids) as $entity_id) {
@@ -381,18 +386,18 @@ class MaterializedView {
    */
   protected function updateMapped($entity_type, $entity_id) {
     // TODO: Start a transaction.
-    
+
     // TODO OPTIMIZATION: Intelligently update rows instead of doing a DELETE+INSERT.
-    
+
     // Delete the existing rows related to the object in the database.
     $this->delete($entity_type, $entity_id, FALSE);
-  
+
     // Loop through filters to determine if the updated object qualifies for inclusion.
     foreach ($this->static_filters as $static_filter) {
-    
+
       // Get the value of the column.
       $value = $static_filter->column->getValue($entity_type, $entity_id);
-      
+
       // Apply the operator
       if (!$static_filter->operator->apply($value)) {
 
@@ -400,7 +405,7 @@ class MaterializedView {
         return FALSE;
       }
     }
-    
+
     // The entity meets static critieria; add its row(s) to the MV table.
 
     // We always need to write the entity_type and entity_id to the row.
@@ -413,13 +418,13 @@ class MaterializedView {
     foreach ($this->extra_columns as $extra_columns) {
       $write[$extra_columns->getName()] = $extra_columns->getValue($entity_type, $entity_id);
     }
-    
+
     // Get values for the sort columns
     foreach ($this->sort_sets as $sort_set) {
       foreach ($sort_set->getSorts() as $sort) {
         // Sort colummns are often used multiple places, but we should only generate them up once.
         if (!array_key_exists($sort->column->getName(), $write)) {
-        
+
           // TODO: Throw exception if a sort column value is an array.
           $write[$sort->column->getName()] = $sort->column->getValue($entity_type, $entity_id);
         }
@@ -438,14 +443,14 @@ class MaterializedView {
     while ($instance = $iterator->getNextInstance()) {
       // Write the record to the database
       $schema = drupal_get_schema($this->name);
-      
+
       $success = drupal_write_record($this->name, $instance);
       if (!$success) {
         // TODO: Make translatable.
         watchdog('mv', 'Updating the materialized view "' . check_plain($this->getName()) . '" failed:<pre>' . check_plain(print_r($instance, TRUE)) . '</pre>');
       }
     }
-    
+
     return TRUE;
   }
 
@@ -454,15 +459,15 @@ class MaterializedView {
    */
   protected function getPrimaryKey() {
     $columns = array('entity_type', 'entity_id');
-    
+
     // Add dynamic filter columns as components of the primary key
     foreach ($this->dynamic_filters as $dynamic_filter) {
       $columns[] = $dynamic_filter->column->getName();
     }
-    
+
     return $columns;
   }
-  
+
   /**
    * Delete an object from this materialized view.
    *
@@ -481,7 +486,7 @@ class MaterializedView {
     if ($run_updates) {
       $this->update($entity_type, $entity_id, TRUE);
     }
-    
+
     return $num_deleted;
   }
 }
@@ -492,7 +497,7 @@ class MaterializedView {
 final class MVJobQueue {
   static $update_jobs = array();
   static $deletion_jobs = array();
-  
+
   /**
    * Update all materialized views for the given object.
    *
@@ -528,13 +533,13 @@ final class MVJobQueue {
     if (empty(self::$update_jobs) && empty(self::$deletion_jobs)) {
       return;
     }
-    
+
     // Ensure the MV schema are up to date.
     materialized_view_reconcile();
-  
+
     // Load the materialized views.
     $materialized_views = materialized_view_get();
-  
+
     // Run update jobs.
     foreach (self::$update_jobs as $job) {
       foreach ($materialized_views as $materialized_view) {
@@ -558,7 +563,7 @@ final class MVInstanceIterator {
   protected $instance_tracker;
   protected $all_values;
   protected $done;
-  
+
   public function __construct($all_values) {
     $this->done = FALSE;
     $this->instance_tracker = array();
@@ -573,13 +578,13 @@ final class MVInstanceIterator {
       $this->instance_tracker[$key] = 0;
     }
   }
-  
+
   public function getNextInstance() {
     $instance = $this->getCurrentInstance();
     $this->incrementInstance();
     return $instance;
   }
-  
+
   protected function incrementInstance() {
     foreach ($this->instance_tracker as $key => $value) {
       if ($value < count($this->all_values[$key])) {
@@ -592,15 +597,15 @@ final class MVInstanceIterator {
         }
       }
     }
-    
+
     $this->done = TRUE;
   }
-  
+
   protected function getCurrentInstance() {
     if ($this->done) {
       return FALSE;
     }
-  
+
     $return = array();
     foreach ($this->instance_tracker as $key => $value) {
       $return[$key] = $this->all_values[$key][$value];
@@ -619,12 +624,12 @@ class MVSortSet {
   protected $name;
   protected $id;
   protected static $max_id = 0;
-  
+
   public function __construct($name = NULL) {
     $this->id = self::$max_id++;
     $this->name = $name;
   }
-  
+
   public function getName() {
     if (isset($this->name)) {
       return $this->name;
@@ -649,7 +654,7 @@ class MVSortSet {
     $sort->direction = $direction;
     $this->sorts[] = $sort;
   }
-  
+
   /**
    * Gets the an array of the sorts in the set.
    *
@@ -706,7 +711,7 @@ class MVEqualityOperator extends MVOperator {
   public function apply($value) {
     return $value == $this->comparison_value;
   }
-  
+
   public function endsIndex() {
     return FALSE;
   }
@@ -729,7 +734,7 @@ class MVInequalityOperator extends MVOperator {
   public function apply($value) {
     return $value != $this->comparison_value;
   }
-  
+
   public function endsIndex() {
     return TRUE;
   }
@@ -783,14 +788,14 @@ abstract class MVColumn {
     $changed[$entity_type] = array($entity_id);
     return $changed;
   }
-  
+
   /**
    * Retrieve a column scheme suitable for use in $table['fields'].
    *
    * @returns The column scheme.
    */
   abstract public function getSchema();
-  
+
   /**
    * Retrieve the column name.
    *
@@ -801,24 +806,24 @@ abstract class MVColumn {
 
 class MVEntityCache {
   protected static $entities = array();
-  
+
   public static function set($entity_type, $entity_id, $entity) {
     if (!isset(self::$entities[$entity_type])) {
       self::$entities[$entity_type] = array();
     }
-    
+
     self::$entities[$entity_type][$entity_id] = $entity;
   }
-  
+
   public static function get($entity_type, $entity_id, $autoload = TRUE) {
     if (isset(self::$entities[$entity_type][$entity_id])) {
       return self::$entities[$entity_type][$entity_id];
     }
-    
+
     if ($autoload === FALSE) {
       return FALSE;
     }
-    
+
     $load_function = $autoload;
     if ($autoload === TRUE) {
       $load_function = $entity_type . '_load';

@@ -1,5 +1,9 @@
 <?php
-// $Id$
+/**
+ * @file
+ * Materialized views installation directives
+ *
+ */
 
 /**
  * Implementation of hook_install().
@@ -7,7 +11,7 @@
 function materialized_view_install() {
   // Create module tables.
   drupal_install_schema('materialized_view');
-  
+
   // Create materialized view tables and bootstrap indexing.
   // TK Can we permanently remove this?
   // materialized_view_reconcile();
@@ -76,7 +80,7 @@ function materialized_view_schema() {
     ),
     'primary key' => array('mvid', 'entity_type'),
   );
-  
+
   // Supply the various materialized view schema for the sake of drupal_write_record().
   if (function_exists('materialized_view_get')) {
     $materialized_views = materialized_view_get();

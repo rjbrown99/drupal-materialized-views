@@ -1,4 +1,9 @@
 <?php
+/**
+ * @file
+ * Materialized views admin functions
+ *
+ */
 
 function materialized_view_status() {
   $content = array();
@@ -12,12 +17,12 @@ function materialized_view_status() {
 
 function materialized_view_admin_ops_form() {
   $form = array();
-  
+
   $form['ops'] = array(
     '#type' => 'fieldset',
     '#title' => t('Global materialized view operations'),
   );
-  
+
   $form['ops']['index'] = array(
     '#type' => 'submit',
     '#value' => t('Run indexing batch'),
@@ -41,7 +46,7 @@ function materialized_view_admin_ops_form() {
     '#type' => 'submit',
     '#value' => t('Drop and reinstall'),
   );
-  
+
   return $form;
 }
 
@@ -67,16 +72,16 @@ function _materialized_view_indexing_status() {
     // Index a batch from each entity type.
     foreach ($entity_types as $entity_type_name => $entity_type_info) {
       $max_indexed_id = db_result(db_query('SELECT max_indexed_id FROM {materialized_view_indexing} WHERE mvid = "%s" AND entity_type = "%s"', $materialized_view->getName(), $entity_type_name));
-      
+
 
       $max_id_sql = 'SELECT MAX(' . db_escape_table($entity_type_info['id_column']) . ') FROM {' . db_escape_table($entity_type_info['id_table']) . '}';
       $max_id = db_result(db_query($max_id_sql));
-      
+
       if ($max_indexed_id === FALSE) {
         $max_indexed_id = t('None (indexing has not started)');
         $ratio = 0;
       }
-      else if ($max_indexed_id <= 1) {
+      elseif ($max_indexed_id <= 1) {
         $max_indexed_id = t('None (indexing complete)');
         $ratio = 1;
       }
@@ -94,7 +99,7 @@ function _materialized_view_indexing_status() {
       }
       else {
         $percentage_left = '';
-        $percentage_right = $percentage;      
+        $percentage_right = $percentage;
       }
 
       $progress = '';
@@ -104,7 +109,7 @@ function _materialized_view_indexing_status() {
       if ($progress_width - $green > 0) {
         $progress .= '<div style="float: left; padding-left: 5px; height: 20px; width: ' . ($progress_width - $green) . 'px; background-color: #CCCCCC;">' . $percentage_right . '</div>';
       }
-      
+
       $rows[] = array(
         array(
           'data' => check_plain($entity_type_info['title']),
@@ -124,7 +129,7 @@ function _materialized_view_indexing_status() {
         ),
       );
     }
-    
+
     $content[] = theme('table', $cols, $rows);
   }
 
@@ -133,25 +138,25 @@ function _materialized_view_indexing_status() {
 
 function materialized_view_admin_ops_form_submit($form, &$form_state) {
   $op = $form_state['clicked_button']['#value'];
-  
+
   if ($op == t('Reconcile the schema')) {
     $effect = materialized_view_reconcile();
     if ($effect) {
       drupal_set_message('Materialized views reconciled. Tables were affected.');
     }
     else {
-      drupal_set_message('Materialized views reconciled. No effect.');    
+      drupal_set_message('Materialized views reconciled. No effect.');
     }
   }
-  else if ($op == t('Run indexing batch')) {
+  elseif ($op == t('Run indexing batch')) {
     materialized_view_index();
     drupal_set_message('Ran an indexing batch.');
   }
-  else if ($op == t('Reset indexing')) {
+  elseif ($op == t('Reset indexing')) {
     db_query('TRUNCATE {materialized_view_indexing}');
     drupal_set_message('Indexing reset.');
   }
-  else if ($op == t('Drop and reinstall')) {
+  elseif ($op == t('Drop and reinstall')) {
     $materialized_views = materialized_view_get();
     foreach ($materialized_views as $materialized_view) {
       $materialized_view->installSchema();

@@ -258,6 +258,9 @@ class MVNodeVocabularies extends MVColumn {
   }
 }
 
+/**
+ * Provides an MV data source
+ */
 class MVEntityType extends MVColumn {
   public function getValue($entity_type, $entity_id) {
     return $entity_type;
@@ -273,6 +276,9 @@ class MVEntityType extends MVColumn {
   }
 }
 
+/**
+ * Provides an MV data source
+ */
 class MVNodeCommentStatistic extends MVColumn {
   protected $column_name;
 
@@ -357,3 +363,40 @@ class MVActivityColumn extends MVColumn {
   }
 }
 
+/**
+ * Provides an MV data source.
+ *
+ * Given an $entity_id (aid), load and return the user roles for that activity actor.
+ * Enables filtering of activity messages based on user role. For example, you could
+ * add a dynamic filter to exclude messages from role ID 8 or whatever.
+ */
+class MVActivityUserRoles extends MVColumn {
+  public function getValue($entity_type, $entity_id) {
+    $roles = array();
+    $sql = "SELECT ur.rid FROM {users_roles} ur INNER JOIN {activity} activity ON ur.uid = activity.uid WHERE activity.aid = '%d'";
+    $result = db_query($sql, $entity_id);
+    while ($row = db_fetch_array($result)) {
+      $roles[] = $row['rid']; 
+    }
+    return $roles;
+  }
+
+  public function getChangeMapping($entity_type, $entity_id) {
+    $changed = array();
+
+    if ($entity_type == 'activity') {
+      $changed[$entity_type] = array($entity_id);
+    }
+
+    return $changed;
+  }
+
+  public function getSchema() {
+    $schema = drupal_get_schema_unprocessed('user', 'users_roles');
+    return $schema['fields']['rid'];
+  }
+
+  public function getName() {
+    return 'activity_roles_rid';
+  }
+}

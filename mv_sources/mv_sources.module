@@ -12,11 +12,21 @@ function materialized_view_entity_type_info() {
     'id_column' => 'nid',
   );
 
+  $types['activity'] = array(
+    'title' => t('Activity'),
+    'id_table' => 'activity',
+    'id_column' => 'aid',
+  );
+
   return $types;
 }
 
 /**
  * Implementation of hook_nodeapi().
+ *
+ * This function is called when any node operations take place. In this
+ * case, when nodes are inserted, updated, or deleted the appropriate
+ * action is taken on the Materialized View table.
  */
 function materialized_view_nodeapi($node, $op) {
   MVEntityCache::set('node', $node->nid, $node);
@@ -30,6 +40,11 @@ function materialized_view_nodeapi($node, $op) {
 
 /**
  * Implementation of hook_comment().
+ *
+ * This function is called when a comment operation takes place. In this
+ * case, when comments are inserted, updated, published, unpublished,
+ * or deleted the appropriate action is taken on the Materialized View
+ * table.
  */
 function materialized_view_comment($a1, $op) {
   $comment = (array) $a1;
@@ -47,6 +62,37 @@ function materialized_view_comment($a1, $op) {
   }
 }
 
+/**
+ * Implementation of hook_activity_message_recorded().
+ *
+ * This function is called immediately after an activity message has
+ * been recorded to the database.
+ */
+function materialized_view_activity_recorded($record, $context) {
+  MVEntityCache::set('activity', $record->amid, $record);
+  MVJobQueue::update('activity', $record->amid);
+}
+
+/**
+ * Implementation of hook_activity_message_deleted().
+ *
+ * This function is called immediately after an activity message has
+ * been deleted from the database. Note that this hook may not be in
+ * the main module yet. See http://drupal.org/node/1186544
+ */
+function materialized_view_activity_deleted($aids) {
+  foreach ($aids as $aid) {
+    // Do we need an MVEntityCache here?
+    MVJobQueue::delete('activity', $aid);
+  }
+}
+
+/**
+ * Provides an MV data source for nodes. This provides node results
+ * one column at a time rather than as a complete object. IE, you
+ * can pass in a column_name of 'created' and it will return a
+ * timestamp.
+ */
 class MVNodeColumn extends MVColumn {
   protected $column_name;
 
@@ -86,7 +132,7 @@ class MVNodeColumn extends MVColumn {
   }
 }
 
-/*
+/**
  * Provides an MV data source for the latest editing or comment activity on a node.
  */
 class MVLastNodeActivityTimestamp extends MVColumn {
@@ -125,7 +171,7 @@ class MVLastNodeActivityTimestamp extends MVColumn {
   }
 }
 
-/*
+/**
  * Provides an MV data source for the terms associated with a node.
  */
 class MVNodeTerms extends MVColumn {
@@ -167,6 +213,9 @@ class MVNodeTerms extends MVColumn {
   }
 }
 
+/**
+ * Provides an MV data source for the vocabularies associated with a node's terms.
+ */
 class MVNodeVocabularies extends MVColumn {
   public function getValue($entity_type, $entity_id) {
     $node = node_load($entity_id);
@@ -261,3 +310,50 @@ class MVNodeCommentStatistic extends MVColumn {
     return 'node_' . $this->column_name;
   }
 }
+
+/**
+ * Provides an MV data source for activity.
+ */
+class MVActivityColumn extends MVColumn {
+  protected $column_name;
+
+  public function __construct($column_name) {
+    $this->column_name = $column_name;
+  }
+
+  public function getValue($entity_type, $entity_id) {
+    // In activity 1.x, there was a load function but it does not exist
+    // in 2.x unless you write your own. It would be advisable, as it
+    // could enable cached loading of messages and columns.
+    if (function_exists('activity_load')) {
+      $result = (array) MVEntityCache::get('activity', $entity_id);
+      return $result[$this->column_name];
+    }
+    else {
+      $sql = "SELECT activity.* FROM {activity} activity WHERE activity.aid = '%d'";
+      $result = db_fetch_array(db_query($sql, $entity_id));
+      return $result[$this->column_name];
+    }
+  }
+
+  public function getChangeMapping($entity_type, $entity_id) {
+    $changed = array();
+
+    // A change to an activity record only affects its own value.
+    if ($entity_type == 'activity') {
+      $changed[$entity_type] = array($entity_id);
+    }
+
+    return $changed;
+  }
+
+  public function getSchema() {
+    $schema = drupal_get_schema_unprocessed('activity', 'activity');
+    return $schema['fields'][$this->column_name];
+  }
+
+  public function getName() {
+    return 'activity_' . $this->column_name;
+  }
+}
+
